@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# 确保脚本以root权限运行
+if [ "$EUID" -ne 0 ]; then
+  echo "请以root用户运行脚本"
+  exit 1
+fi
+
+# 更新软件包列表并安装 Squid 和 Apache Utils（用于 htpasswd）
+apt update
+apt install -y squid apache2-utils
+
+# 备份原始配置文件
+cp /etc/squid/squid.conf /etc/squid/squid.conf.backup
+
+# 创建新的配置文件
+cat <<EOL > /etc/squid/squid.conf
+# Squid 配置文件
+http_port 20000
+
+# 定义认证程序
+auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwd
+auth_param basic children 5
+auth_param basic realm Squid proxy-caching web server
+auth_param basic credentialsttl 2 hours
+auth_param basic casesensitive off
+
+# 访问控制
+acl auth_users proxy_auth REQUIRED
+http_access allow auth_users
+
+# 禁止所有其他访问
+http_access deny all
+EOL
+
+# 创建密码文件并添加用户
+htpasswd -bc /etc/squid/passwd zhaokai zhaokai27
+
+# 启动 Squid 服务
+systemctl restart squid
+
+# 设置开机自启
+systemctl enable squid
+
+# 配置防火墙允许 Squid 端口
+ufw allow 20000/tcp
+
+# 重启防火墙
+ufw reload
+
+# 显示 Squid 服务状态
+systemctl status squid
+
+echo "Squid 代理服务器安装和配置完成！"
+echo "端口：20000"
+echo "用户名：zhaokai"
+echo "密码：zhaokai27"
